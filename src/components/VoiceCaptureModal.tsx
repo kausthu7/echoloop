@@ -222,10 +222,30 @@ export const VoiceCaptureModal: React.FC<VoiceCaptureModalProps> = ({
 
     try {
       const now = new Date();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const offsetMinutes = -now.getTimezoneOffset();
+      const sign = offsetMinutes >= 0 ? '+' : '-';
+      const absH = String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, '0');
+      const absM = String(Math.abs(offsetMinutes) % 60).padStart(2, '0');
+      const timezoneOffset = `${sign}${absH}:${absM}`;
+
+      const pad = (n: number) => (n < 10 ? '0' + n : String(n));
+      const localDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const localTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const userLocalTime = `${localDate}T${localTime}${timezoneOffset}`;
+      const currentDayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
+      const humanReadableLocal = `${now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })} at ${now.toLocaleTimeString('en-US')} (${timezone}, UTC${timezoneOffset})`;
+
       const payload: any = {
-        currentTimestamp: now.toISOString(),
-        currentDayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }),
-        userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        userLocalTime,
+        timezone,
+        timezoneOffset,
+        localDate,
+        currentDayOfWeek,
+        humanReadableLocal,
+        // Legacy aliases
+        currentTimestamp: userLocalTime,
+        userTimezone: timezone,
       };
 
       if (presetText) {

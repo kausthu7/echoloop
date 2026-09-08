@@ -91,6 +91,23 @@ export const ActionBoard: React.FC<ActionBoardProps> = ({
     }
   };
 
+  const getScheduledBadgeText = (iso: string) => {
+    try {
+      const target = new Date(iso);
+      const isToday = target.toDateString() === currentTime.toDateString();
+      if (isToday) return 'Scheduled Today';
+
+      const tomorrow = new Date(currentTime);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const isTomorrow = target.toDateString() === tomorrow.toDateString();
+      if (isTomorrow) return 'Scheduled Tomorrow';
+
+      return 'Scheduled';
+    } catch {
+      return 'Scheduled';
+    }
+  };
+
   const totalActionCount = inFlightTasks.length + slippedTasks.length + pendingTasks.length;
 
   const showInFlight = filter === 'ALL' || filter === 'IN_PROGRESS';
@@ -362,7 +379,7 @@ export const ActionBoard: React.FC<ActionBoardProps> = ({
           <div className="flex items-center justify-between text-xs">
             <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-zinc-100 text-zinc-600">
               <Clock className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-zinc-500" />
-              Scheduled Today
+              {getScheduledBadgeText(task.scheduledKickoffTime)}
             </span>
             <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">
               {formatScheduledTime(task.scheduledKickoffTime)}
