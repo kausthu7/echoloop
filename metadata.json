@@ -1,0 +1,6 @@
+{
+  "name": "EchoLoop",
+  "description": "Autonomous Voice-First Accountability Agent with multilingual voice capture, smart scheduling, two-tier follow-up check-ins, and a dual-interface action & wins ledger.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
