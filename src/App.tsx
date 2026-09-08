@@ -733,6 +733,8 @@ export default function App() {
         user={currentUser}
         onOpenAuth={() => setCurrentView('AUTH')}
         onSignOut={handleSignOut}
+        onInstallApp={handleInstallClick}
+        canInstall={!!installPrompt}
         soundEnabled={soundEnabled}
         onToggleSound={() => setSoundEnabled(!soundEnabled)}
         voiceSpeechEnabled={voiceSpeechEnabled}

@@ -12,7 +12,8 @@ import {
   ChevronDown,
   Bell,
   Users,
-  User
+  User,
+  Download
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -25,6 +26,8 @@ interface HeaderProps {
   user?: UserProfile | null;
   onOpenAuth?: () => void;
   onSignOut?: () => void;
+  onInstallApp?: () => void;
+  canInstall?: boolean;
   soundEnabled: boolean;
   onToggleSound: () => void;
   voiceSpeechEnabled: boolean;
@@ -45,6 +48,8 @@ export const Header: React.FC<HeaderProps> = ({
   user,
   onOpenAuth,
   onSignOut,
+  onInstallApp,
+  canInstall = false,
   soundEnabled,
   onToggleSound,
   voiceSpeechEnabled,
@@ -131,6 +136,20 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+
+          {/* Install App Button (When install prompt is available) */}
+          {canInstall && onInstallApp && (
+            <button
+              id="header-install-app-btn"
+              type="button"
+              onClick={onInstallApp}
+              title="Install EchoLoop App on your device"
+              className="flex px-2 sm:px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-200/90 text-xs font-semibold items-center gap-1 sm:gap-1.5 shadow-2xs transition-all active:scale-[0.98] cursor-pointer shrink-0"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
 
           {/* Send a Treat Action - Always visible on mobile & desktop with responsive label */}
           <button
@@ -265,6 +284,20 @@ export const Header: React.FC<HeaderProps> = ({
                       >
                         <Users className="w-3.5 h-3.5 text-zinc-500" />
                         <span>Accountability Circle</span>
+                      </button>
+                    )}
+
+                    {canInstall && onInstallApp && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onInstallApp();
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-emerald-800 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition-colors font-medium"
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Install EchoLoop App</span>
                       </button>
                     )}
 
