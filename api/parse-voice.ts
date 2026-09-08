@@ -223,9 +223,17 @@ Always return valid JSON adhering to the schema.`;
     // Return structured proposal to the client (Gemini NEVER writes directly to DB)
     return res.status(200).json(parsedData);
   } catch (error: any) {
-    console.error('Gemini voice parsing serverless error:', error);
+    // Sanitize error message to prevent secret or URL key leakage to client
+    const rawMessage = String(error?.message || '');
+    const sanitizedError = rawMessage
+      .replace(/key=[^&\s]+/gi, 'key=[REDACTED]')
+      .replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED]')
+      .replace(/AQ\.[0-9A-Za-z-_]{35,}/g, '[REDACTED]');
+
+    console.error('Gemini voice parsing serverless error:', sanitizedError);
     return res.status(500).json({
-      error: error?.message || 'Failed to process audio with Gemini',
+      error: 'Failed to process voice note with AI. Please try again.',
+      details: process.env.NODE_ENV === 'development' ? sanitizedError : undefined,
     });
   }
 }
