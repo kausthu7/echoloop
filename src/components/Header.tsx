@@ -203,11 +203,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="px-3.5 py-2.5 border-b border-zinc-100">
                     <p className="font-semibold text-zinc-900 truncate">{user.name}</p>
                     <p className="text-[11px] text-zinc-500 truncate">{user.email}</p>
-                    {user.role && (
-                      <span className="inline-block mt-1 text-[10px] font-medium bg-indigo-50 text-indigo-800 px-1.5 py-0.5 rounded-md">
-                        {user.role}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {user.role && (
+                        <span className="text-[10px] font-medium bg-indigo-50 text-indigo-800 px-1.5 py-0.5 rounded-md">
+                          {user.role}
+                        </span>
+                      )}
+                      {user.accountType === 'DEMO' && (
+                        <span className="text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 px-1.5 py-0.5 rounded-md">
+                          Demo Sandbox
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="py-1">

@@ -26,10 +26,23 @@ import {
   speakExecutivePrompt 
 } from './utils/audio';
 import { 
-  getStoredUser, 
-  apiFetchCurrentUser, 
-  apiSignOut 
-} from './services/auth';
+  supabaseGetCurrentUser, 
+  supabaseSignOut, 
+  onSupabaseAuthStateChange 
+} from './services/supabaseAuth';
+import { 
+  supabaseFetchTasks, 
+  supabaseCreateTask, 
+  supabaseUpdateTask, 
+  supabaseDeleteTask 
+} from './services/supabaseTasks';
+import { 
+  supabaseFetchTreats, 
+  supabaseCreateTreat 
+} from './services/supabaseTreats';
+import { supabaseRecordWin } from './services/supabaseWins';
+import { supabaseCreateReminder } from './services/supabaseReminders';
+import { isSupabaseConfigured } from './lib/supabase';
 import { Mic, Download, X } from 'lucide-react';
 
 export default function App() {
@@ -62,16 +75,25 @@ export default function App() {
     }
   ]);
 
-  // Track logged-in user with persistent session support
+  // Track active user session (null by default for real unauthenticated visitors)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    return getStoredUser() || {
-      id: 'user-demo-alex',
-      name: 'Alex Rivers',
-      email: 'alex@echoloop.io',
-      role: 'Founder & Product Lead',
-      accountType: 'DEMO',
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const isDemo = localStorage.getItem('echoloop_demo_mode') === 'true';
+      if (isDemo) {
+        return {
+          id: 'demo-sandbox-user',
+          name: 'Demo Explorer',
+          email: 'demo@echoloop.local',
+          role: 'Founder & Product Lead',
+          accountType: 'DEMO',
+          createdAt: new Date().toISOString(),
+        };
+      }
+      const saved = localStorage.getItem('echoloop_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [alertModal, setAlertModal] = useState<ActiveAlertModalState>({
@@ -117,47 +139,81 @@ export default function App() {
     }
   }, []);
 
-  // Fetch initial tasks from backend
-  // Fetch real tasks from backend
-  const fetchTasks = async () => {
+  // Load cloud tasks from Supabase (Protected by RLS)
+  const loadCloudTasks = useCallback(async () => {
     try {
-      const res = await fetch('/api/tasks');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.tasks)) {
-          setTasks(data.tasks);
-          try {
-            localStorage.setItem('echoloop_tasks', JSON.stringify(data.tasks));
-          } catch {}
-          return;
-        }
+      if (isSupabaseConfigured()) {
+        const cloudTasks = await supabaseFetchTasks();
+        setTasks(cloudTasks);
+        try { localStorage.setItem('echoloop_tasks', JSON.stringify(cloudTasks)); } catch {}
+        return;
       }
     } catch (err) {
-      console.warn('Could not fetch tasks from server:', err);
+      console.warn('Could not fetch cloud tasks from Supabase:', err);
     }
 
-    // Fallback to local storage if offline
     try {
       const cached = localStorage.getItem('echoloop_tasks');
+      if (cached) setTasks(JSON.parse(cached));
+    } catch {}
+  }, []);
+
+  // Load demo tasks for isolated client sandbox (Contract Rule #6)
+  const loadDemoTasks = useCallback(() => {
+    try {
+      const cached = localStorage.getItem('echoloop_demo_tasks');
       if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
-          setTasks(parsed);
-        }
+        setTasks(JSON.parse(cached));
+      } else {
+        const sampleTask: Task = {
+          id: 'demo-task-1',
+          title: 'Review EchoLoop Launch Deck',
+          originalAudioSummary: 'Finish reviewing presentation slides before investor call',
+          detectedLanguage: 'English',
+          scheduledKickoffTime: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          status: 'PENDING',
+          checkinDelayMinutes: 45,
+          extensionsCount: 0,
+          createdAt: new Date().toISOString(),
+        };
+        setTasks([sampleTask]);
+        localStorage.setItem('echoloop_demo_tasks', JSON.stringify([sampleTask]));
       }
     } catch {}
-  };
-
-  useEffect(() => {
-    fetchTasks();
-
-    // Verify active session token with the backend
-    apiFetchCurrentUser().then((user) => {
-      if (user) {
-        setCurrentUser(user);
-      }
-    });
   }, []);
+
+  // Bootstrap session on startup & wire real-time auth listener
+  useEffect(() => {
+    if (isSupabaseConfigured()) {
+      supabaseGetCurrentUser().then((user) => {
+        if (user) {
+          setCurrentUser(user);
+          loadCloudTasks();
+        } else {
+          const isDemoActive = localStorage.getItem('echoloop_demo_mode') === 'true';
+          if (isDemoActive) {
+            loadDemoTasks();
+          } else {
+            setCurrentUser(null);
+          }
+        }
+      });
+
+      const { unsubscribe } = onSupabaseAuthStateChange((user) => {
+        setCurrentUser(user);
+        if (user && user.accountType !== 'DEMO') {
+          loadCloudTasks();
+        }
+      });
+
+      return () => unsubscribe();
+    } else {
+      const isDemoActive = localStorage.getItem('echoloop_demo_mode') === 'true';
+      if (isDemoActive) {
+        loadDemoTasks();
+      }
+    }
+  }, [loadCloudTasks, loadDemoTasks]);
 
   // Sync tasks to local storage whenever tasks state updates
   useEffect(() => {
@@ -269,21 +325,20 @@ export default function App() {
     );
     setAlertModal({ isOpen: false, type: 'KICKOFF', task: null });
 
-    // Sync backend
-    try {
-      await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-    } catch (e) {
-      console.warn('Sync error:', e);
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        await supabaseUpdateTask(taskId, updates);
+        await supabaseCreateReminder(taskId, followUpTime, 'FOLLOWUP');
+      } catch (e) {
+        console.warn('Update kickoff in Supabase error:', e);
+      }
     }
   };
 
   // Handler: Kickoff -> [Already Done]
   const handleKickoffAlreadyDone = async (taskId: string) => {
     const now = new Date();
+    const task = tasks.find((t) => t.id === taskId);
     const updates: Partial<Task> = {
       status: 'COMPLETED',
       completedAt: now.toISOString(),
@@ -299,14 +354,13 @@ export default function App() {
     if (soundEnabled) playSuccessChime();
     triggerConfettiCelebration();
 
-    try {
-      await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-    } catch (e) {
-      console.warn('Sync error:', e);
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        await supabaseUpdateTask(taskId, updates);
+        await supabaseRecordWin(taskId, task?.title || 'Accountability Goal', 'Completed immediately');
+      } catch (e) {
+        console.warn('Sync complete error:', e);
+      }
     }
   };
 
@@ -344,31 +398,31 @@ export default function App() {
     if (soundEnabled) playSuccessChime();
     triggerConfettiCelebration();
 
-    try {
-      await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-    } catch (e) {
-      console.warn('Sync error:', e);
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        await supabaseUpdateTask(taskId, updates);
+        await supabaseRecordWin(taskId, currentTask?.title || 'Accountability Goal', durationStr);
+      } catch (e) {
+        console.warn('Sync verification error:', e);
+      }
     }
   };
 
-  // Handler: Follow-Up -> [No, Need More Time] (Extensions)
+  // Handler: Follow-Up -> [No, Need More Time] (Contract Rule #1 & #2: PENDING with new kickoff + extensions_count++)
   const handleFollowUpExtend = async (
     taskId: string,
     extensionMinutes: number,
     label: string
   ) => {
     const now = new Date();
-    const newFollowUpTime = new Date(now.getTime() + extensionMinutes * 60 * 1000).toISOString();
+    const newKickoffTime = new Date(now.getTime() + extensionMinutes * 60 * 1000).toISOString();
     const currentTask = tasks.find((t) => t.id === taskId);
     const newExtensionsCount = (currentTask?.extensionsCount || 0) + 1;
 
     const updates: Partial<Task> = {
-      status: 'IN_PROGRESS',
-      followUpScheduledTime: newFollowUpTime,
+      status: 'PENDING',
+      scheduledKickoffTime: newKickoffTime,
+      followUpScheduledTime: undefined,
       extensionsCount: newExtensionsCount,
     };
 
@@ -377,17 +431,17 @@ export default function App() {
     );
     setAlertModal({ isOpen: false, type: 'FOLLOWUP', task: null });
 
-    // Allow re-triggering follow-up when new time is reached
+    // Allow re-triggering kickoff when new time is reached
     triggeredFollowUpsRef.current.delete(taskId);
+    triggeredKickoffsRef.current.delete(taskId);
 
-    try {
-      await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-    } catch (e) {
-      console.warn('Sync error:', e);
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        await supabaseUpdateTask(taskId, updates);
+        await supabaseCreateReminder(taskId, newKickoffTime, 'KICKOFF');
+      } catch (e) {
+        console.warn('Sync extension error:', e);
+      }
     }
   };
 
@@ -403,18 +457,16 @@ export default function App() {
     );
     setAlertModal({ isOpen: false, type: 'FOLLOWUP', task: null });
 
-    try {
-      await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-    } catch (e) {
-      console.warn('Sync error:', e);
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        await supabaseUpdateTask(taskId, updates);
+      } catch (e) {
+        console.warn('Sync slipped error:', e);
+      }
     }
   };
 
-  // Handler: Reschedule Slipped Task
+  // Handler: Reschedule Slipped Task -> PENDING
   const handleRescheduleSlipped = async (taskId: string, extraMinutes: number) => {
     const now = new Date();
     const newKickoff = new Date(now.getTime() + extraMinutes * 60 * 1000).toISOString();
@@ -431,14 +483,13 @@ export default function App() {
       prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
     );
 
-    try {
-      await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-    } catch (e) {
-      console.warn('Sync error:', e);
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        await supabaseUpdateTask(taskId, updates);
+        await supabaseCreateReminder(taskId, newKickoff, 'KICKOFF');
+      } catch (e) {
+        console.warn('Sync reschedule error:', e);
+      }
     }
   };
 
@@ -494,59 +545,75 @@ export default function App() {
     setNotifications((prev) => [newNotif, ...prev]);
   };
 
-  // Handler: Create Task from Phase 1 Voice Parser
+  // Handler: Create Task from Phase 1 Voice Parser (or Manual)
   const handleTaskCreated = async (taskPayload: Partial<Task>) => {
-    try {
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskPayload),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.task) {
-          setTasks((prev) => [data.task, ...prev]);
-          const newNotif: AppNotification = {
-            id: `notif-${Date.now()}`,
-            title: `Task Scheduled ⚡`,
-            message: `Scheduled: "${data.task.title}"`,
-            type: 'KICKOFF',
-            timestamp: new Date().toISOString(),
-            read: false,
-            taskId: data.task.id,
-          };
-          setNotifications((prev) => [newNotif, ...prev]);
-        }
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        const created = await supabaseCreateTask(taskPayload);
+        setTasks((prev) => [created, ...prev]);
+        const newNotif: AppNotification = {
+          id: `notif-${Date.now()}`,
+          title: `Task Scheduled ⚡`,
+          message: `Scheduled: "${created.title}"`,
+          type: 'KICKOFF',
+          timestamp: new Date().toISOString(),
+          read: false,
+          taskId: created.id,
+        };
+        setNotifications((prev) => [newNotif, ...prev]);
+        return;
+      } catch (e) {
+        console.warn('Supabase create task error:', e);
       }
-    } catch (e) {
-      console.warn('Create task error:', e);
+    }
+
+    // Demo Mode Sandbox or local offline fallback (Contract Rule #6)
+    const localTask: Task = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      title: taskPayload.title || 'Untitled Goal',
+      originalAudioSummary: taskPayload.originalAudioSummary || 'Voice recorded note',
+      detectedLanguage: taskPayload.detectedLanguage || 'English',
+      transcript: taskPayload.transcript || '',
+      scheduledKickoffTime: taskPayload.scheduledKickoffTime || new Date().toISOString(),
+      status: taskPayload.status || 'PENDING',
+      checkinDelayMinutes: taskPayload.checkinDelayMinutes || 60,
+      extensionsCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    setTasks((prev) => [localTask, ...prev]);
+
+    if (currentUser?.accountType === 'DEMO') {
+      try {
+        const current = JSON.parse(localStorage.getItem('echoloop_demo_tasks') || '[]');
+        localStorage.setItem('echoloop_demo_tasks', JSON.stringify([localTask, ...current]));
+      } catch {}
     }
   };
 
   // Handler: Delete Task
   const handleDeleteTask = async (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    try {
-      await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-    } catch (e) {
-      console.warn('Delete error:', e);
+    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+      try {
+        await supabaseDeleteTask(taskId);
+      } catch (e) {
+        console.warn('Supabase delete task error:', e);
+      }
+    } else if (currentUser?.accountType === 'DEMO') {
+      try {
+        const filtered = tasks.filter((t) => t.id !== taskId);
+        localStorage.setItem('echoloop_demo_tasks', JSON.stringify(filtered));
+      } catch {}
     }
   };
 
   // Handler: Reset Seed Data
   const handleResetSeedData = async () => {
-    try {
-      const res = await fetch('/api/tasks/seed', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.tasks) {
-          setTasks(data.tasks);
-          triggeredKickoffsRef.current.clear();
-          triggeredFollowUpsRef.current.clear();
-        }
-      }
-    } catch (e) {
-      console.warn('Reset seed error:', e);
+    if (currentUser?.accountType === 'DEMO') {
+      localStorage.removeItem('echoloop_demo_tasks');
+      loadDemoTasks();
+      triggeredKickoffsRef.current.clear();
+      triggeredFollowUpsRef.current.clear();
     }
   };
 
@@ -574,29 +641,43 @@ export default function App() {
   });
 
   const handleSignOut = async () => {
-    await apiSignOut();
+    await supabaseSignOut();
+    localStorage.removeItem('echoloop_demo_mode');
+    localStorage.removeItem('echoloop_user');
     setCurrentUser(null);
+    setTasks([]);
   };
 
-  // Dedicated View: Render Sign In / Sign Up Page
-  if (currentView === 'AUTH') {
+  // Render Auth Page if unauthenticated or explicitly opened
+  if (!currentUser || currentView === 'AUTH') {
     return (
       <AuthPage
         initialMode="SIGN_IN"
         onAuthSuccess={(user) => {
           setCurrentUser(user);
           setCurrentView('APP');
+          if (user.accountType === 'DEMO') {
+            loadDemoTasks();
+          } else {
+            loadCloudTasks();
+          }
           const welcomeNotif: AppNotification = {
             id: `notif-${Date.now()}`,
             title: `Welcome, ${user.name}! 👋`,
-            message: `Signed in as ${user.email} (${user.role || 'Member'}). Your session is securely active.`,
+            message: user.accountType === 'DEMO'
+              ? 'Entered Demo Sandbox (Local Mode). Explore freely!'
+              : `Signed in as ${user.email}. Cloud sync active.`,
             type: 'SYSTEM',
             timestamp: new Date().toISOString(),
             read: false,
           };
           setNotifications((prev) => [welcomeNotif, ...prev]);
         }}
-        onBackToApp={() => setCurrentView('APP')}
+        onBackToApp={() => {
+          if (currentUser) {
+            setCurrentView('APP');
+          }
+        }}
       />
     );
   }
@@ -824,8 +905,15 @@ export default function App() {
           setIsTreatModalOpen(false);
           setTeammateForTreat(null);
         }}
-        recipientName={teammateForTreat?.name}
-        onTreatSent={(_treat) => {
+        recipientName={teammateForTreat || undefined}
+        onTreatSent={async (_treat) => {
+          if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+            try {
+              await supabaseCreateTreat(_treat);
+            } catch (e) {
+              console.warn('Sync treat error:', e);
+            }
+          }
           const newNotif: AppNotification = {
             id: `notif-${Date.now()}`,
             title: `Treat Sent! ☕`,

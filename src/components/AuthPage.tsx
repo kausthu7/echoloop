@@ -16,10 +16,10 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { 
-  apiSignIn, 
-  apiSignUp, 
-  apiSignInDemo 
-} from '../services/auth';
+  supabaseSignIn, 
+  supabaseSignUp 
+} from '../services/supabaseAuth';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthPageProps {
   initialMode?: 'SIGN_IN' | 'SIGN_UP';
@@ -44,9 +44,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 }) => {
   const [mode, setMode] = useState<'SIGN_IN' | 'SIGN_UP'>(initialMode);
   
-  // Sign In / Common Fields
-  const [email, setEmail] = useState('alex@echoloop.io');
-  const [password, setPassword] = useState('password123');
+  // Sign In / Common Fields (clean empty defaults for production)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
   // Sign Up Fields
@@ -67,15 +67,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setMode(newMode);
     setErrorMessage(null);
     setSuccessMessage(null);
-    if (newMode === 'SIGN_UP') {
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-      setName('');
-    } else {
-      if (!email) setEmail('alex@echoloop.io');
-      if (!password) setPassword('password123');
-    }
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setName('');
   };
 
   // Real-time password strength calculation
@@ -153,26 +148,34 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setIsLoading(true);
 
     try {
+      if (!isSupabaseConfigured()) {
+        throw new Error('Supabase is not configured yet. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables, or click "Explore in Demo Mode" below.');
+      }
+
       if (mode === 'SIGN_UP') {
-        const result = await apiSignUp({
+        const result = await supabaseSignUp({
           name: name.trim(),
           email: trimmedEmail,
           password,
           role,
         });
-        setSuccessMessage('Account created successfully! Entering EchoLoop...');
-        setTimeout(() => {
-          onAuthSuccess(result.user);
-        }, 600);
+        if (result.user) {
+          setSuccessMessage('Account created successfully! Welcome to EchoLoop.');
+          setTimeout(() => {
+            onAuthSuccess(result.user!);
+          }, 600);
+        }
       } else {
-        const result = await apiSignIn({
+        const result = await supabaseSignIn({
           email: trimmedEmail,
           password,
         });
-        setSuccessMessage('Signed in successfully! Entering EchoLoop...');
-        setTimeout(() => {
-          onAuthSuccess(result.user);
-        }, 600);
+        if (result.user) {
+          setSuccessMessage('Signed in successfully! Entering EchoLoop...');
+          setTimeout(() => {
+            onAuthSuccess(result.user);
+          }, 600);
+        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Authentication failed. Please check your credentials.');
@@ -181,30 +184,27 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }
   };
 
-  // 1-Click Instant Demo Login
-  const handleGuestDemo = async () => {
+  // 1-Click Instant Demo Sandbox (Contract Rule #6: Isolated client sandbox; never writes to Supabase)
+  const handleGuestDemo = () => {
     setIsLoading(true);
     setErrorMessage(null);
+    const demoUser: UserProfile = {
+      id: 'demo-sandbox-user',
+      name: 'Demo Explorer',
+      email: 'demo@echoloop.local',
+      role: 'Founder & Product Lead',
+      accountType: 'DEMO',
+      createdAt: new Date().toISOString(),
+    };
     try {
-      const res = await apiSignInDemo();
-      setSuccessMessage('Connected to Demo Explorer! Entering EchoLoop...');
-      setTimeout(() => {
-        onAuthSuccess(res.user);
-      }, 500);
-    } catch {
-      // Fallback local demo profile
-      const fallbackUser: UserProfile = {
-        id: 'user-demo-alex',
-        name: 'Alex Rivers',
-        email: 'alex@echoloop.io',
-        role: 'Founder & Product Lead',
-        accountType: 'DEMO',
-        createdAt: new Date().toISOString(),
-      };
-      onAuthSuccess(fallbackUser);
-    } finally {
+      localStorage.setItem('echoloop_demo_mode', 'true');
+      localStorage.setItem('echoloop_user', JSON.stringify(demoUser));
+    } catch {}
+    setSuccessMessage('Entering Demo Sandbox (Local Mode)...');
+    setTimeout(() => {
       setIsLoading(false);
-    }
+      onAuthSuccess(demoUser);
+    }, 400);
   };
 
   // 1-Click Google Sign In simulation

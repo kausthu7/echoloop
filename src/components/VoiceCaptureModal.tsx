@@ -11,6 +11,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { ParseVoiceResult, Task } from '../types';
+import { supabaseGetAccessToken } from '../services/supabaseAuth';
 
 interface VoiceCaptureModalProps {
   isOpen: boolean;
@@ -249,9 +250,15 @@ export const VoiceCaptureModal: React.FC<VoiceCaptureModalProps> = ({
         throw new Error('Please record audio or select a note.');
       }
 
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = await supabaseGetAccessToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/parse-voice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
 
