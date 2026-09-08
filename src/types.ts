@@ -95,15 +95,47 @@ export interface TeamPartner {
   lastActive: string;
 }
 
+export type MemoryCategory = 'FINANCIAL_DEBT' | 'NOTE' | 'PROMISE' | 'PERSONAL_FACT' | 'GENERAL';
+
+export interface ExtractedEntities {
+  person?: string;
+  amount?: string;
+  currency?: string;
+  direction?: 'OWED_TO_ME' | 'I_OWE' | 'NEUTRAL';
+  keyDetails?: string;
+}
+
+export interface SecondBrainMemory {
+  id: string;
+  userId?: string;
+  content: string;
+  category: MemoryCategory;
+  eventDate?: string;
+  entities?: ExtractedEntities;
+  rawText?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
   referencedTaskIds?: string[];
+  referencedMemoryIds?: string[];
+  savedMemory?: SecondBrainMemory;
 }
 
 export interface BrainChatResponse {
   reply: string;
   referencedTaskIds?: string[];
+  referencedMemoryIds?: string[];
+  newMemoryToSave?: {
+    content: string;
+    category: MemoryCategory;
+    eventDate?: string;
+    entities?: ExtractedEntities;
+  };
 }
+

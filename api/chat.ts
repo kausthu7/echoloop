@@ -93,7 +93,7 @@ export default async function handler(req: ServerlessRequest, res: ServerlessRes
     }
 
     const body = req.body || {};
-    const { message, history = [], tasks = [] } = body;
+    const { message, history = [], tasks = [], memories = [] } = body;
 
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'Message prompt is required.' });
@@ -126,12 +126,24 @@ export default async function handler(req: ServerlessRequest, res: ServerlessRes
       createdAt: t.createdAt,
     }));
 
+    // Sanitize and format memories ledger
+    const memoriesSnapshot = (Array.isArray(memories) ? memories : []).map((m: any) => ({
+      id: m.id,
+      content: m.content,
+      category: m.category, // FINANCIAL_DEBT | NOTE | PROMISE | PERSONAL_FACT | GENERAL
+      eventDate: m.eventDate,
+      entities: m.entities || {},
+      rawText: m.rawText,
+      createdAt: m.createdAt,
+    }));
+
     const ai = new GoogleGenAI({ apiKey });
 
     const systemInstruction = `You are EchoLoop's autonomous Second Brain AI Assistant.
 EchoLoop's motto is: "Your second brain that follows through."
-You have direct access to the user's task history and accountability ledger.
-You know what tasks were completed, what slipped, what are currently in progress, and what are scheduled.
+You have direct, dual-ledger access to:
+1. THE USER'S TASK ACCOUNTABILITY LEDGER (completed, slipped, active, and scheduled tasks).
+2. THE USER'S LONG-TERM EPISODIC MEMORY LEDGER (debts, loans, money owed, personal facts, notes, promises, and arbitrary statements the user told you to remember).
 
 USER TEMPORAL CONTEXT:
 - Current Local Date & Time: ${userLocalTime} (Offset: ${timezoneOffset})
@@ -139,34 +151,47 @@ USER TEMPORAL CONTEXT:
 - Current Day of Week: ${currentDayOfWeek}
 - User Timezone: ${userTimezone}
 
-THE USER'S TASK LEDGER (${tasksSnapshot.length} total tasks):
+LEDGER 1: USER'S TASK LEDGER (${tasksSnapshot.length} total tasks):
 ${JSON.stringify(tasksSnapshot, null, 2)}
 
+LEDGER 2: USER'S LONG-TERM MEMORY LEDGER (${memoriesSnapshot.length} total memories):
+${JSON.stringify(memoriesSnapshot, null, 2)}
+
 CORE GUIDELINES:
-1. DATE & CALENDAR LOOKUPS:
-   - When the user asks about a specific day or date (e.g. "what did I do on Aug 3?", "what did I do yesterday?", "tasks on Monday", "what's scheduled for tomorrow?"):
-     - Convert the requested date (e.g., "Aug 3", "August 3rd", "yesterday") into the target calendar date format (YYYY-MM-DD) within the context of the user's current date (${localDate}).
-     - Search the ledger for tasks whose completedAt, scheduledKickoffTime, or createdAt falls on that calendar day.
-     - Categorize the findings clearly:
-       • ✅ **Completed Tasks**: State title, when it was finished, and duration if available.
-       • ⚠️ **Slipped or Missed Tasks**: State why it slipped if a reason was logged.
-       • ⏳ **In-Progress or Scheduled Tasks**: State when they were initiated or scheduled.
-     - If NO tasks exist for that date, explicitly state: "No tasks were recorded in your ledger for [Date]." Then offer to check another date or summarize their recent wins.
 
-2. PROGRESS & ACCOUNTABILITY INQUIRIES:
-   - If asked about streaks, accomplishments, or summaries, synthesize key stats: total completed vs slipped, most recent wins, and words of encouragement.
+1. REMEMBERING NEW INFORMATION (STORAGE INTENT):
+   - When the user tells you to remember something, or states a past or future transaction, fact, debt, or event (e.g., "on sept 4th user give 500rs to someone", "remember on Sept 4th I gave 500rs to Alex", "I lent 200 to Rahul", "Alex owes me 500rs", "remember my passport is in the blue drawer", "note that Sarah's birthday is May 14"):
+     - You MUST extract this into "newMemoryToSave" in your JSON response!
+     - Populate:
+       • "content": A concise, clear summary statement (e.g. "Gave 500rs to someone on Sept 4th (They owe you 500rs)").
+       • "category": One of "FINANCIAL_DEBT", "NOTE", "PROMISE", "PERSONAL_FACT", "GENERAL". (Use "FINANCIAL_DEBT" for money given, lent, borrowed, or debts).
+       • "eventDate": If a specific date was mentioned (e.g. "Sept 4th"), convert it to YYYY-MM-DD relative to today's date (${localDate}).
+       • "entities": Extract { person, amount, currency, direction: "OWED_TO_ME" | "I_OWE" | "NEUTRAL", keyDetails }.
+         * If the user gave or lent money to someone, direction is "OWED_TO_ME".
+         * If the user borrowed money from someone, direction is "I_OWE".
+     - In your "reply", warmly confirm that you have securely committed this to their Second Brain memory. Assure them that whenever they ask in the future (even days or months later), you will remember it.
 
-3. TONE & FORMATTING:
-   - Write in an executive, warm, and highly accountable tone.
-   - Use crisp Markdown with emojis, bold headers, and bullet points.
-   - Keep answers clear, structured, and easy to read at a glance.
+2. EPISODIC MEMORY RECALL & DEBT/LOAN INQUIRIES:
+   - When the user asks questions about remembered facts or financial debts (e.g., "did someone have to give money to me?", "who owes me money?", "what did I lend out?", "did I give money to anyone?", "what did I tell you to remember?", "where is my passport?"):
+     - Search the LONG-TERM MEMORY LEDGER thoroughly.
+     - For debt / money queries ("did someone have to give money to me?"):
+       - Check memories categorized as "FINANCIAL_DEBT" or with direction "OWED_TO_ME", or mentioning money, lending, or giving.
+       - Answer with total accuracy! State the exact person (or "someone"), the exact amount (e.g. 500rs), the date (e.g. September 4th), and that this money is owed back to them.
+       - Populate "referencedMemoryIds" with the IDs of matching memories.
+     - If no matching memory is found, state clearly: "According to your memory ledger, you haven't recorded anyone owing you money."
 
-OUTPUT SCHEMA:
-Return valid JSON with:
-{
-  "reply": "Markdown formatted reply answering the user question directly",
-  "referencedTaskIds": ["id1", "id2"]
-}`;
+3. DATE & TASK LOOKUPS (TASK LEDGER):
+   - When the user asks about tasks on a specific day (e.g. "what did I do on Aug 3?", "what did I do yesterday?", "tasks on Monday"):
+     - Convert the requested date into YYYY-MM-DD within context of ${localDate}.
+     - Search the Task Ledger for tasks whose completedAt, scheduledKickoffTime, or createdAt falls on that day.
+     - Categorize findings clearly (✅ Completed, ⚠️ Slipped, ⏳ In-Progress).
+     - If no tasks exist for that date, explicitly state that.
+
+4. PROGRESS & ACCOUNTABILITY:
+   - Provide executive, inspiring summaries when asked about streaks or wins.
+
+5. TONE & FORMATTING:
+   - Crisp Markdown with emojis, bold headers, bullet points, and high clarity.`;
 
     const contents: any[] = [];
 
@@ -203,6 +228,34 @@ Return valid JSON with:
               items: { type: Type.STRING },
               description: 'Array of task IDs mentioned or directly relevant',
             },
+            referencedMemoryIds: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'Array of memory IDs mentioned or directly relevant',
+            },
+            newMemoryToSave: {
+              type: Type.OBJECT,
+              description: 'Populated if user stated something to remember (fact, debt, loan, note, event)',
+              properties: {
+                content: { type: Type.STRING, description: 'Structured summary of what to remember' },
+                category: {
+                  type: Type.STRING,
+                  enum: ['FINANCIAL_DEBT', 'NOTE', 'PROMISE', 'PERSONAL_FACT', 'GENERAL'],
+                },
+                eventDate: { type: Type.STRING, description: 'YYYY-MM-DD if an event date was stated' },
+                entities: {
+                  type: Type.OBJECT,
+                  properties: {
+                    person: { type: Type.STRING },
+                    amount: { type: Type.STRING },
+                    currency: { type: Type.STRING },
+                    direction: { type: Type.STRING, enum: ['OWED_TO_ME', 'I_OWE', 'NEUTRAL'] },
+                    keyDetails: { type: Type.STRING },
+                  },
+                },
+              },
+              required: ['content', 'category'],
+            },
           },
           required: ['reply'],
         },
@@ -214,7 +267,7 @@ Return valid JSON with:
     try {
       parsedResult = JSON.parse(responseText);
     } catch {
-      parsedResult = { reply: responseText, referencedTaskIds: [] };
+      parsedResult = { reply: responseText, referencedTaskIds: [], referencedMemoryIds: [] };
     }
 
     return res.status(200).json(parsedResult);

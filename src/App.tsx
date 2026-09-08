@@ -627,7 +627,7 @@ export default function App() {
           };
           setNotifications((prev) => [welcomeNotif, ...prev]);
         }}
-        onBackToApp={currentUser ? () => setCurrentView('APP') : undefined}
+        onBackToApp={() => setCurrentView('APP')}
       />
     );
   }

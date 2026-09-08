@@ -96,6 +96,21 @@ CREATE TABLE IF NOT EXISTS public.treats (
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
+-- ------------------------------------------------------------------------------
+-- 7. SECOND BRAIN MEMORIES TABLE (Long-term Episodic & Contextual Memory)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.second_brain_memories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'GENERAL' CHECK (category IN ('FINANCIAL_DEBT', 'NOTE', 'PROMISE', 'PERSONAL_FACT', 'GENERAL')),
+  event_date TIMESTAMPTZ,
+  extracted_entities JSONB DEFAULT '{}'::jsonb,
+  raw_text TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
 -- ==============================================================================
 -- INDEXES FOR PERFORMANCE
 -- ==============================================================================
@@ -105,6 +120,8 @@ CREATE INDEX IF NOT EXISTS idx_check_ins_task ON public.check_ins(task_id);
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON public.reminders(user_id, scheduled_time, triggered);
 CREATE INDEX IF NOT EXISTS idx_wins_user ON public.wins(user_id, completed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_treats_user ON public.treats(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_user ON public.second_brain_memories(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_category ON public.second_brain_memories(user_id, category);
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -118,6 +135,7 @@ ALTER TABLE public.check_ins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.treats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.second_brain_memories ENABLE ROW LEVEL SECURITY;
 
 -- 1. Profiles Policies
 CREATE POLICY "Users can view own profile" ON public.profiles
@@ -178,6 +196,19 @@ CREATE POLICY "Users can select own treats" ON public.treats
 
 CREATE POLICY "Users can insert own treats" ON public.treats
   FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 7. Second Brain Memories Policies
+CREATE POLICY "Users can select own memories" ON public.second_brain_memories
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own memories" ON public.second_brain_memories
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own memories" ON public.second_brain_memories
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own memories" ON public.second_brain_memories
+  FOR DELETE USING (auth.uid() = user_id);
 
 -- ==============================================================================
 -- AUTOMATIC PROFILE CREATION TRIGGER ON AUTH SIGNUP
