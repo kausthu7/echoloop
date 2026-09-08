@@ -585,6 +585,138 @@ Always return valid JSON adhering to the schema.`;
   }
 });
 
+// POST EchoLoop Second Brain AI Chat endpoint
+app.post("/api/chat", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const { message, history = [], tasks = [] } = body;
+
+    if (!message || typeof message !== "string" || !message.trim()) {
+      return res.status(400).json({ error: "Message prompt is required." });
+    }
+
+    const userTimezone = body.timezone || body.userTimezone || "UTC";
+    const timezoneOffset = body.timezoneOffset || "+00:00";
+    const localDate = body.localDate || new Date().toISOString().split("T")[0];
+    const userLocalTime = body.userLocalTime || body.currentTimestamp || new Date().toISOString();
+    const currentDayOfWeek = body.currentDayOfWeek || new Date().toLocaleDateString("en-US", { weekday: "long" });
+
+    // Sanitize and simplify task list for context efficiency
+    const tasksSnapshot = (Array.isArray(tasks) ? tasks : []).map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status, // PENDING | IN_PROGRESS | SLIPPED | COMPLETED
+      scheduledKickoffTime: t.scheduledKickoffTime,
+      inProgressStartedAt: t.inProgressStartedAt,
+      completedAt: t.completedAt,
+      completionSource: t.completionSource,
+      timeFromKickoffToComplete: t.timeFromKickoffToComplete,
+      slippedReason: t.slippedReason,
+      summary: t.originalAudioSummary,
+      createdAt: t.createdAt,
+    }));
+
+    const ai = getGeminiClient();
+
+    const systemInstruction = `You are EchoLoop's autonomous Second Brain AI Assistant.
+EchoLoop's motto is: "Your second brain that follows through."
+You have direct access to the user's task history and accountability ledger.
+You know what tasks were completed, what slipped, what are currently in progress, and what are scheduled.
+
+USER TEMPORAL CONTEXT:
+- Current Local Date & Time: ${userLocalTime} (Offset: ${timezoneOffset})
+- Current Local Date: ${localDate}
+- Current Day of Week: ${currentDayOfWeek}
+- User Timezone: ${userTimezone}
+
+THE USER'S TASK LEDGER (${tasksSnapshot.length} total tasks):
+${JSON.stringify(tasksSnapshot, null, 2)}
+
+CORE GUIDELINES:
+1. DATE & CALENDAR LOOKUPS:
+   - When the user asks about a specific day or date (e.g. "what did I do on Aug 3?", "what did I do yesterday?", "tasks on Monday", "what's scheduled for tomorrow?"):
+     - Convert the requested date (e.g., "Aug 3", "August 3rd", "yesterday") into the target calendar date format (YYYY-MM-DD) within the context of the user's current date (${localDate}).
+     - Search the ledger for tasks whose completedAt, scheduledKickoffTime, or createdAt falls on that calendar day.
+     - Categorize the findings clearly:
+       • ✅ **Completed Tasks**: State title, when it was finished, and duration if available.
+       • ⚠️ **Slipped or Missed Tasks**: State why it slipped if a reason was logged.
+       • ⏳ **In-Progress or Scheduled Tasks**: State when they were initiated or scheduled.
+     - If NO tasks exist for that date, explicitly state: "No tasks were recorded in your ledger for [Date]." Then offer to check another date or summarize their recent wins.
+
+2. PROGRESS & ACCOUNTABILITY INQUIRIES:
+   - If asked about streaks, accomplishments, or summaries, synthesize key stats: total completed vs slipped, most recent wins, and words of encouragement.
+
+3. TONE & FORMATTING:
+   - Write in an executive, warm, and highly accountable tone.
+   - Use crisp Markdown with emojis, bold headers, and bullet points.
+   - Keep answers clear, structured, and easy to read at a glance.
+
+OUTPUT SCHEMA:
+Return valid JSON with:
+{
+  "reply": "Markdown formatted reply answering the user's question directly",
+  "referencedTaskIds": ["id1", "id2"]
+}`;
+
+    // Format conversation history for Gemini
+    const contents: any[] = [];
+
+    if (Array.isArray(history) && history.length > 0) {
+      for (const h of history.slice(-6)) {
+        contents.push({
+          role: h.role === "assistant" || h.sender === "assistant" ? "model" : "user",
+          parts: [{ text: h.text || h.content || "" }],
+        });
+      }
+    }
+
+    contents.push({
+      role: "user",
+      parts: [{ text: message }],
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents,
+      config: {
+        systemInstruction,
+        temperature: 0.2,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            reply: {
+              type: Type.STRING,
+              description: "Markdown formatted reply answering the user's question directly",
+            },
+            referencedTaskIds: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "Array of task IDs mentioned or directly relevant",
+            },
+          },
+          required: ["reply"],
+        },
+      },
+    });
+
+    const responseText = response.text || "{}";
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(responseText);
+    } catch {
+      parsedResult = { reply: responseText, referencedTaskIds: [] };
+    }
+
+    res.json(parsedResult);
+  } catch (error: any) {
+    console.error("Second Brain chat error:", error);
+    res.status(500).json({
+      error: error?.message || "Failed to process chat query",
+    });
+  }
+});
+
 // ================= VITE MIDDLEWARE SETUP =================
 
 async function startServer() {

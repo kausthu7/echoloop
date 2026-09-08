@@ -95,4 +95,15 @@ export interface TeamPartner {
   lastActive: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  timestamp: string;
+  referencedTaskIds?: string[];
+}
 
+export interface BrainChatResponse {
+  reply: string;
+  referencedTaskIds?: string[];
+}

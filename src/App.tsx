@@ -45,8 +45,9 @@ import {
 } from './services/supabaseTreats';
 import { supabaseRecordWin } from './services/supabaseWins';
 import { supabaseCreateReminder } from './services/supabaseReminders';
+import { SecondBrainChatModal } from './components/SecondBrainChatModal';
 import { isSupabaseConfigured } from './lib/supabase';
-import { Mic, Download, X } from 'lucide-react';
+import { Mic, Download, X, Brain } from 'lucide-react';
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -59,6 +60,7 @@ export default function App() {
   const [showInstallBanner, setShowInstallBanner] = useState(true);
   const [isTreatModalOpen, setIsTreatModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'APP' | 'AUTH'>('APP');
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Interactive Modals State
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -679,6 +681,7 @@ export default function App() {
         unreadNotificationsCount={notifications.filter((n) => !n.read).length}
         onOpenTeam={() => setIsTeamOpen(true)}
         onOpenTour={() => setIsTourOpen(true)}
+        onOpenChat={() => setIsChatOpen(true)}
         user={currentUser}
         onOpenAuth={() => setCurrentView('AUTH')}
         onSignOut={handleSignOut}
@@ -957,8 +960,49 @@ export default function App() {
         }}
       />
 
-      {/* Floating Voice Button (Desktop only - mobile has centered BottomNav button) */}
-      <div className="hidden sm:flex fixed bottom-6 right-6 z-20">
+      {/* Second Brain AI Chat Modal */}
+      <SecondBrainChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        tasks={tasks}
+        onSelectTask={(task) => {
+          setIsChatOpen(false);
+          if (task.status === 'COMPLETED') {
+            setActiveTab('WINS');
+          } else {
+            setActiveTab('ACTION');
+          }
+        }}
+      />
+
+      {/* Floating Second Brain FAB (Mobile: bottom right above navigation) */}
+      <div className="sm:hidden fixed bottom-20 right-4 z-40">
+        <button
+          id="mobile-floating-second-brain-btn"
+          type="button"
+          onClick={() => setIsChatOpen(true)}
+          title="Ask Second Brain"
+          className="h-11 px-3.5 rounded-full bg-white/95 text-violet-800 border border-violet-200/90 shadow-lg shadow-violet-500/15 backdrop-blur-md flex items-center gap-1.5 active:scale-95 transition-transform cursor-pointer text-xs font-bold ring-2 ring-violet-50"
+        >
+          <Brain className="w-4 h-4 text-violet-600 animate-pulse" />
+          <span>Ask Brain</span>
+        </button>
+      </div>
+
+      {/* Floating Action Buttons (Desktop only - mobile has centered BottomNav button) */}
+      <div className="hidden sm:flex fixed bottom-6 right-6 z-20 items-center gap-2.5">
+        <button
+          id="floating-second-brain-btn"
+          type="button"
+          onClick={() => setIsChatOpen(true)}
+          title="Ask Second Brain: recall what you did on any date, slipped goals, and streaks"
+          className="h-12 px-4 rounded-full bg-white hover:bg-violet-50/80 text-violet-900 border border-violet-200/90 shadow-xl shadow-violet-500/10 ring-4 ring-violet-50/80 flex items-center gap-2 transition-all active:scale-95 cursor-pointer font-semibold text-xs"
+        >
+          <Brain className="w-4 h-4 text-violet-600 animate-pulse" />
+          <span>Ask Second Brain</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+        </button>
+
         <button
           id="floating-voice-record-btn"
           type="button"

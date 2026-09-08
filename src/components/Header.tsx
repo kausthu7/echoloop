@@ -13,7 +13,8 @@ import {
   Users,
   User,
   Download,
-  HelpCircle
+  HelpCircle,
+  Brain
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -37,11 +38,13 @@ interface HeaderProps {
   inFlightCount: number;
   slippedCount: number;
   completedCount: number;
+  onOpenChat?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenVoiceCapture,
   onOpenSendTreat,
+  onOpenChat,
   onOpenNotifications,
   unreadNotificationsCount = 0,
   onOpenTeam,
@@ -150,6 +153,21 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Download className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
+
+          {/* Second Brain AI Chat Action */}
+          {onOpenChat && (
+            <button
+              id="header-second-brain-btn"
+              type="button"
+              onClick={onOpenChat}
+              title="Ask Second Brain: recall tasks from any date, check streaks, and slipped goals"
+              className="flex px-2 sm:px-3 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-950 border border-violet-200/90 text-xs font-semibold items-center gap-1 sm:gap-1.5 shadow-2xs transition-all active:scale-[0.98] cursor-pointer shrink-0"
+            >
+              <Brain className="w-3.5 h-3.5 text-violet-600 shrink-0" />
+              <span className="hidden sm:inline">Second Brain</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
             </button>
           )}
 
@@ -280,6 +298,21 @@ export const Header: React.FC<HeaderProps> = ({
                             {unreadNotificationsCount}
                           </span>
                         )}
+                      </button>
+                    )}
+
+                    {onOpenChat && (
+                      <button
+                        id="menu-second-brain-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenChat();
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <Brain className="w-3.5 h-3.5 text-violet-600" />
+                        <span>Ask Second Brain</span>
                       </button>
                     )}
 
