@@ -4,7 +4,6 @@ import {
   Volume2, 
   VolumeX, 
   Sparkles, 
-  RotateCcw,
   Circle,
   Coffee,
   LogIn,
@@ -13,7 +12,8 @@ import {
   Bell,
   Users,
   User,
-  Download
+  Download,
+  HelpCircle
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -28,11 +28,11 @@ interface HeaderProps {
   onSignOut?: () => void;
   onInstallApp?: () => void;
   canInstall?: boolean;
+  onOpenTour?: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
   voiceSpeechEnabled: boolean;
   onToggleVoiceSpeech: () => void;
-  onResetSeedData: () => void;
   activeCount: number;
   inFlightCount: number;
   slippedCount: number;
@@ -50,11 +50,11 @@ export const Header: React.FC<HeaderProps> = ({
   onSignOut,
   onInstallApp,
   canInstall = false,
+  onOpenTour,
   soundEnabled,
   onToggleSound,
   voiceSpeechEnabled,
   onToggleVoiceSpeech,
-  onResetSeedData,
   inFlightCount,
 }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -126,16 +126,18 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Reset Demo Data (Desktop only - mobile accessible in Profile Menu) */}
-          <button
-            id="reset-demo-btn"
-            type="button"
-            onClick={onResetSeedData}
-            title="Reset to sample tasks"
-            className="hidden md:flex p-1.5 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
+          {/* Feature & Button Tour Guide */}
+          {onOpenTour && (
+            <button
+              id="header-tour-guide-btn"
+              type="button"
+              onClick={onOpenTour}
+              title="Platform Guide: What Every Button Does"
+              className="hidden md:flex p-1.5 items-center justify-center rounded-lg text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          )}
 
           {/* Install App Button (When install prompt is available) */}
           {canInstall && onInstallApp && (
@@ -228,15 +230,23 @@ export const Header: React.FC<HeaderProps> = ({
                           {user.role}
                         </span>
                       )}
-                      {user.accountType === 'DEMO' && (
-                        <span className="text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 px-1.5 py-0.5 rounded-md">
-                          Demo Sandbox
-                        </span>
-                      )}
                     </div>
                   </div>
 
                   <div className="py-1">
+                    {onOpenTour && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenTour();
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 cursor-pointer transition-colors font-medium"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Guide: What Every Button Does</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -329,18 +339,6 @@ export const Header: React.FC<HeaderProps> = ({
                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${voiceSpeechEnabled ? 'bg-amber-50 text-amber-800' : 'bg-zinc-100 text-zinc-500'}`}>
                           {voiceSpeechEnabled ? 'ON' : 'OFF'}
                         </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          onResetSeedData();
-                        }}
-                        className="w-full px-3.5 py-2 text-left text-zinc-600 hover:bg-zinc-50 flex items-center gap-2 cursor-pointer transition-colors"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>Load Demo Tasks (Optional)</span>
                       </button>
                     </div>
 

@@ -32,6 +32,7 @@ import {
   supabaseUpdateProfile
 } from './services/supabaseAuth';
 import { ProfileSetupModal } from './components/ProfileSetupModal';
+import { FeatureTourModal } from './components/FeatureTourModal';
 import { 
   supabaseFetchTasks, 
   supabaseCreateTask, 
@@ -64,6 +65,7 @@ export default function App() {
   const [isTeamOpen, setIsTeamOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
   const [teammateForTreat, setTeammateForTreat] = useState<string | null>(null);
 
   // Live Notifications Feed - Real Mode
@@ -81,17 +83,6 @@ export default function App() {
   // Track active user session (null by default for real unauthenticated visitors)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
-      const isDemo = localStorage.getItem('echoloop_demo_mode') === 'true';
-      if (isDemo) {
-        return {
-          id: 'demo-sandbox-user',
-          name: 'Demo Explorer',
-          email: 'demo@echoloop.local',
-          role: 'Founder & Product Lead',
-          accountType: 'DEMO',
-          createdAt: new Date().toISOString(),
-        };
-      }
       const saved = localStorage.getItem('echoloop_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
@@ -161,30 +152,6 @@ export default function App() {
     } catch {}
   }, []);
 
-  // Load demo tasks for isolated client sandbox (Contract Rule #6)
-  const loadDemoTasks = useCallback(() => {
-    try {
-      const cached = localStorage.getItem('echoloop_demo_tasks');
-      if (cached) {
-        setTasks(JSON.parse(cached));
-      } else {
-        const sampleTask: Task = {
-          id: 'demo-task-1',
-          title: 'Review EchoLoop Launch Deck',
-          originalAudioSummary: 'Finish reviewing presentation slides before investor call',
-          detectedLanguage: 'English',
-          scheduledKickoffTime: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-          status: 'PENDING',
-          checkinDelayMinutes: 45,
-          extensionsCount: 0,
-          createdAt: new Date().toISOString(),
-        };
-        setTasks([sampleTask]);
-        localStorage.setItem('echoloop_demo_tasks', JSON.stringify([sampleTask]));
-      }
-    } catch {}
-  }, []);
-
   // Bootstrap session on startup & wire real-time auth listener
   useEffect(() => {
     if (isSupabaseConfigured()) {
@@ -197,19 +164,18 @@ export default function App() {
           if (!isCompleted && (!user.name || user.name === 'Google User' || user.name === 'User' || !user.role || user.role === 'Member')) {
             setIsProfileSetupOpen(true);
           }
-        } else {
-          const isDemoActive = localStorage.getItem('echoloop_demo_mode') === 'true';
-          if (isDemoActive) {
-            loadDemoTasks();
-          } else {
-            setCurrentUser(null);
+          // Show tour if user hasn't seen it yet
+          if (!localStorage.getItem(`echoloop_tour_seen_${user.id}`)) {
+            setIsTourOpen(true);
           }
+        } else {
+          setCurrentUser(null);
         }
       });
 
       const { unsubscribe } = onSupabaseAuthStateChange((user) => {
         setCurrentUser(user);
-        if (user && user.accountType !== 'DEMO') {
+        if (user) {
           loadCloudTasks();
           const completedKey = `echoloop_profile_completed_${user.id}`;
           const isCompleted = localStorage.getItem(completedKey) === 'true';
@@ -220,13 +186,8 @@ export default function App() {
       });
 
       return () => unsubscribe();
-    } else {
-      const isDemoActive = localStorage.getItem('echoloop_demo_mode') === 'true';
-      if (isDemoActive) {
-        loadDemoTasks();
-      }
     }
-  }, [loadCloudTasks, loadDemoTasks]);
+  }, [loadCloudTasks]);
 
   // Sync tasks to local storage whenever tasks state updates
   useEffect(() => {
@@ -558,9 +519,10 @@ export default function App() {
     setNotifications((prev) => [newNotif, ...prev]);
   };
 
+
   // Handler: Create Task from Phase 1 Voice Parser (or Manual)
   const handleTaskCreated = async (taskPayload: Partial<Task>) => {
-    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+    if (currentUser && isSupabaseConfigured()) {
       try {
         const created = await supabaseCreateTask(taskPayload);
         setTasks((prev) => [created, ...prev]);
@@ -580,7 +542,7 @@ export default function App() {
       }
     }
 
-    // Demo Mode Sandbox or local offline fallback (Contract Rule #6)
+    // Local offline fallback
     const localTask: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       title: taskPayload.title || 'Untitled Goal',
@@ -594,39 +556,17 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     setTasks((prev) => [localTask, ...prev]);
-
-    if (currentUser?.accountType === 'DEMO') {
-      try {
-        const current = JSON.parse(localStorage.getItem('echoloop_demo_tasks') || '[]');
-        localStorage.setItem('echoloop_demo_tasks', JSON.stringify([localTask, ...current]));
-      } catch {}
-    }
   };
 
   // Handler: Delete Task
   const handleDeleteTask = async (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    if (currentUser?.accountType === 'STANDARD' && isSupabaseConfigured()) {
+    if (currentUser && isSupabaseConfigured()) {
       try {
         await supabaseDeleteTask(taskId);
       } catch (e) {
         console.warn('Supabase delete task error:', e);
       }
-    } else if (currentUser?.accountType === 'DEMO') {
-      try {
-        const filtered = tasks.filter((t) => t.id !== taskId);
-        localStorage.setItem('echoloop_demo_tasks', JSON.stringify(filtered));
-      } catch {}
-    }
-  };
-
-  // Handler: Reset Seed Data
-  const handleResetSeedData = async () => {
-    if (currentUser?.accountType === 'DEMO') {
-      localStorage.removeItem('echoloop_demo_tasks');
-      loadDemoTasks();
-      triggeredKickoffsRef.current.clear();
-      triggeredFollowUpsRef.current.clear();
     }
   };
 
@@ -655,7 +595,6 @@ export default function App() {
 
   const handleSignOut = async () => {
     await supabaseSignOut();
-    localStorage.removeItem('echoloop_demo_mode');
     localStorage.removeItem('echoloop_user');
     setCurrentUser(null);
     setTasks([]);
@@ -666,31 +605,27 @@ export default function App() {
     return (
       <AuthPage
         initialMode="SIGN_IN"
-        onAuthSuccess={(user) => {
+        onAuthSuccess={(user, isNewSignup) => {
           setCurrentUser(user);
           setCurrentView('APP');
-          if (user.accountType === 'DEMO') {
-            loadDemoTasks();
-          } else {
-            loadCloudTasks();
+          loadCloudTasks();
+
+          // Show interactive button tour for first-time signups or uninitiated users
+          if (isNewSignup || !localStorage.getItem(`echoloop_tour_seen_${user.id}`)) {
+            setIsTourOpen(true);
           }
+
           const welcomeNotif: AppNotification = {
             id: `notif-${Date.now()}`,
             title: `Welcome, ${user.name}! 👋`,
-            message: user.accountType === 'DEMO'
-              ? 'Entered Demo Sandbox (Local Mode). Explore freely!'
-              : `Signed in as ${user.email}. Cloud sync active.`,
+            message: `Signed in as ${user.email}. Cloud sync active.`,
             type: 'SYSTEM',
             timestamp: new Date().toISOString(),
             read: false,
           };
           setNotifications((prev) => [welcomeNotif, ...prev]);
         }}
-        onBackToApp={() => {
-          if (currentUser) {
-            setCurrentView('APP');
-          }
-        }}
+        onBackToApp={currentUser ? () => setCurrentView('APP') : undefined}
       />
     );
   }
@@ -743,6 +678,7 @@ export default function App() {
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         unreadNotificationsCount={notifications.filter((n) => !n.read).length}
         onOpenTeam={() => setIsTeamOpen(true)}
+        onOpenTour={() => setIsTourOpen(true)}
         user={currentUser}
         onOpenAuth={() => setCurrentView('AUTH')}
         onSignOut={handleSignOut}
@@ -752,7 +688,6 @@ export default function App() {
         onToggleSound={() => setSoundEnabled(!soundEnabled)}
         voiceSpeechEnabled={voiceSpeechEnabled}
         onToggleVoiceSpeech={() => setVoiceSpeechEnabled(!voiceSpeechEnabled)}
-        onResetSeedData={handleResetSeedData}
         activeCount={pendingCount}
         inFlightCount={inFlightCount}
         slippedCount={slippedCount}
@@ -1008,6 +943,19 @@ export default function App() {
           onDismiss={() => setIsProfileSetupOpen(false)}
         />
       )}
+
+      {/* First-Time Signup & Interactive Feature Tour Modal */}
+      <FeatureTourModal
+        isOpen={isTourOpen}
+        onClose={() => {
+          setIsTourOpen(false);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`echoloop_tour_seen_${currentUser.id}`, 'true');
+            } catch {}
+          }
+        }}
+      />
 
       {/* Floating Voice Button (Desktop only - mobile has centered BottomNav button) */}
       <div className="hidden sm:flex fixed bottom-6 right-6 z-20">

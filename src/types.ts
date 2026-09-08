@@ -51,7 +51,7 @@ export interface UserProfile {
   email: string;
   role?: string;
   avatarUrl?: string;
-  accountType?: 'DEMO' | 'STANDARD' | 'GOOGLE';
+  accountType?: 'STANDARD' | 'GOOGLE';
   createdAt: string;
 }
 

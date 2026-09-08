@@ -6,7 +6,7 @@ import { UserProfile, SignUpPayload, SignInPayload } from '../types';
  */
 export async function supabaseSignUp(payload: SignUpPayload): Promise<{ user: UserProfile | null; error?: string }> {
   if (!isSupabaseConfigured()) {
-    throw new Error('Supabase is not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables or use Demo Mode.');
+    throw new Error('Supabase is not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables.');
   }
 
   const { data, error } = await supabase.auth.signUp({
@@ -45,7 +45,7 @@ export async function supabaseSignUp(payload: SignUpPayload): Promise<{ user: Us
  */
 export async function supabaseSignIn(payload: SignInPayload): Promise<{ user: UserProfile; error?: string }> {
   if (!isSupabaseConfigured()) {
-    throw new Error('Supabase is not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables or use Demo Mode.');
+    throw new Error('Supabase is not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables.');
   }
 
   const { data, error } = await supabase.auth.signInWithPassword({

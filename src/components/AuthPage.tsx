@@ -25,7 +25,7 @@ import { TermsModal } from './TermsModal';
 
 interface AuthPageProps {
   initialMode?: 'SIGN_IN' | 'SIGN_UP';
-  onAuthSuccess: (user: UserProfile) => void;
+  onAuthSuccess: (user: UserProfile, isNewSignup?: boolean) => void;
   onBackToApp: () => void;
 }
 
@@ -99,12 +99,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     return password === confirmPassword;
   }, [password, confirmPassword]);
 
-  // Fill default demo credentials for quick evaluation
-  const handleFillDemoCreds = () => {
-    setEmail('alex@echoloop.io');
-    setPassword('password123');
-    setErrorMessage(null);
-  };
+
 
   // Form submission logic
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,7 +147,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     try {
       if (!isSupabaseConfigured()) {
-        throw new Error('Supabase is not configured yet. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables, or click "Explore in Demo Mode" below.');
+        throw new Error('Supabase is not configured yet. Please verify your environment variables.');
       }
 
       if (mode === 'SIGN_UP') {
@@ -165,7 +160,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         if (result.user) {
           setSuccessMessage('Account created successfully! Welcome to EchoLoop.');
           setTimeout(() => {
-            onAuthSuccess(result.user!);
+            onAuthSuccess(result.user!, true);
           }, 600);
         }
       } else {
@@ -176,7 +171,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         if (result.user) {
           setSuccessMessage('Signed in successfully! Entering EchoLoop...');
           setTimeout(() => {
-            onAuthSuccess(result.user);
+            onAuthSuccess(result.user, false);
           }, 600);
         }
       }
@@ -185,29 +180,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // 1-Click Instant Demo Sandbox (Contract Rule #6: Isolated client sandbox; never writes to Supabase)
-  const handleGuestDemo = () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    const demoUser: UserProfile = {
-      id: 'demo-sandbox-user',
-      name: 'Demo Explorer',
-      email: 'demo@echoloop.local',
-      role: 'Founder & Product Lead',
-      accountType: 'DEMO',
-      createdAt: new Date().toISOString(),
-    };
-    try {
-      localStorage.setItem('echoloop_demo_mode', 'true');
-      localStorage.setItem('echoloop_user', JSON.stringify(demoUser));
-    } catch {}
-    setSuccessMessage('Entering Demo Sandbox (Local Mode)...');
-    setTimeout(() => {
-      setIsLoading(false);
-      onAuthSuccess(demoUser);
-    }, 400);
   };
 
   // Real Google Sign In via Supabase OAuth
@@ -228,7 +200,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         msg.toLowerCase().includes('unsupported')
       ) {
         setErrorMessage(
-          'Google Sign-In is not enabled yet in your Supabase project. To enable it: Go to your Supabase Dashboard -> Authentication -> Providers -> Google, enable it and enter your Google OAuth credentials. In the meantime, you can sign in with Email & Password or explore in Demo Mode.'
+          'Google Sign-In is not enabled yet in your Supabase project. To enable it: Go to your Supabase Dashboard -> Authentication -> Providers -> Google, enable it and enter your Google OAuth credentials.'
         );
       } else {
         setErrorMessage(err?.message || 'Failed to initiate Google sign in.');
@@ -412,15 +384,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   >
                     Email Address
                   </label>
-                  {mode === 'SIGN_IN' && (
-                    <button
-                      type="button"
-                      onClick={handleFillDemoCreds}
-                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2 cursor-pointer transition-colors"
-                    >
-                      Quick-fill Demo
-                    </button>
-                  )}
                 </div>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-zinc-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -584,16 +547,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     </span>
                   </label>
                 )}
-
-                {mode === 'SIGN_IN' && (
-                  <button
-                    type="button"
-                    onClick={handleFillDemoCreds}
-                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
-                  >
-                    Need Demo Login?
-                  </button>
-                )}
               </div>
 
               {/* Primary Vibrant Gradient Button */}
@@ -631,13 +584,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <div>
                 <button
                   id="auth-google-btn"
                   type="button"
                   onClick={handleGoogleAuth}
                   disabled={isLoading}
-                  className="py-2.5 px-3 rounded-2xl bg-white hover:bg-zinc-50 border border-zinc-200/80 shadow-2xs text-xs font-semibold text-zinc-700 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="w-full py-2.5 px-4 rounded-2xl bg-white hover:bg-zinc-50 border border-zinc-200/90 shadow-2xs text-xs font-semibold text-zinc-700 flex items-center justify-center gap-2.5 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -645,19 +598,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                   </svg>
-                  <span>Google</span>
-                </button>
-
-                <button
-                  id="auth-guest-demo-btn"
-                  type="button"
-                  onClick={handleGuestDemo}
-                  disabled={isLoading}
-                  className="py-2.5 px-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100/90 border border-indigo-200/90 shadow-2xs text-xs font-semibold text-indigo-900 flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-                  title="Explore instantly as Alex Rivers (Founder & Product Lead)"
-                >
-                  <Zap className="w-3.5 h-3.5 text-indigo-600 fill-indigo-600" />
-                  <span>Instant Demo</span>
+                  <span>Continue with Google</span>
                 </button>
               </div>
 

@@ -137,30 +137,6 @@ export async function apiSignUp(payload: SignUpPayload): Promise<AuthResponse> {
   return data as AuthResponse;
 }
 
-/**
- * Quick 1-click Demo Account login (Alex Rivers)
- */
-export async function apiSignInDemo(): Promise<AuthResponse> {
-  const res = await fetch('/api/auth/demo', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to connect to demo account.');
-  }
-
-  if (data.token) {
-    setAuthToken(data.token);
-  }
-  if (data.user) {
-    setStoredUser(data.user);
-  }
-
-  return data as AuthResponse;
-}
 
 /**
  * Verify current session token with the backend and retrieve fresh user profile
