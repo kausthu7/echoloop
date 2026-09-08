@@ -4,7 +4,7 @@
   <img src="public/logo.png" alt="EchoLoop Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(79, 70, 229, 0.2);" />
 </p>
 
-<h3 align="center">Autonomous Voice-First Accountability Agent</h3>
+<h3 align="center">Your second brain that follows through.</h3>
 
 <p align="center">
   Speak your commitments naturally in any language. EchoLoop extracts the core action, schedules smart kickoffs, checks in autonomously, and holds you to your word.

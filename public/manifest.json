@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "EchoLoop Accountability",
+  "name": "EchoLoop — Your second brain that follows through.",
   "short_name": "EchoLoop",
-  "description": "Autonomous Voice-First Accountability Agent with smart kickoff and follow-up checks.",
+  "description": "Your second brain that follows through. Autonomous voice-first accountability agent with smart kickoff and follow-up checks.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

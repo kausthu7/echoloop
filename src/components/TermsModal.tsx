@@ -33,7 +33,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-zinc-900">Terms & Privacy Policy</h2>
-              <p className="text-xs text-zinc-500">EchoLoop Autonomous Accountability Platform</p>
+              <p className="text-xs text-zinc-500">EchoLoop • Your second brain that follows through.</p>
             </div>
           </div>
           <button

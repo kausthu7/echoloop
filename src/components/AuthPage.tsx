@@ -232,7 +232,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               EchoLoop
             </span>
             <span className="text-[10px] text-zinc-400 font-medium">
-              Autonomous Accountability
+              Your second brain that follows through.
             </span>
           </div>
         </div>
@@ -264,7 +264,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             <div className="text-center space-y-1.5">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-900 text-[11px] font-semibold mb-1 shadow-2xs">
                 <Sparkles className="w-3 h-3 text-indigo-600" />
-                <span>Voice-First Autonomous Accountability</span>
+                <span>Your second brain that follows through.</span>
               </div>
               
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900">
@@ -640,7 +640,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
       {/* Footer */}
       <footer className="relative z-10 max-w-6xl w-full mx-auto px-6 py-4 text-center text-xs text-zinc-400">
-        EchoLoop &copy; {new Date().getFullYear()} • Autonomous Voice Accountability
+        EchoLoop &copy; {new Date().getFullYear()} • Your second brain that follows through.
       </footer>
 
       <TermsModal

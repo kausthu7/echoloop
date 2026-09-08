@@ -87,7 +87,7 @@ export const Header: React.FC<HeaderProps> = ({
               EchoLoop
             </h1>
             <p className="text-[11px] sm:text-xs text-zinc-400 font-normal leading-tight mt-0.5 truncate">
-              Stay accountable, together.
+              Your second brain that follows through.
             </p>
           </div>
         </div>
