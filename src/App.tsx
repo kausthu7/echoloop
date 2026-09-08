@@ -28,8 +28,10 @@ import {
 import { 
   supabaseGetCurrentUser, 
   supabaseSignOut, 
-  onSupabaseAuthStateChange 
+  onSupabaseAuthStateChange,
+  supabaseUpdateProfile
 } from './services/supabaseAuth';
+import { ProfileSetupModal } from './components/ProfileSetupModal';
 import { 
   supabaseFetchTasks, 
   supabaseCreateTask, 
@@ -61,6 +63,7 @@ export default function App() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isTeamOpen, setIsTeamOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(false);
   const [teammateForTreat, setTeammateForTreat] = useState<string | null>(null);
 
   // Live Notifications Feed - Real Mode
@@ -189,6 +192,11 @@ export default function App() {
         if (user) {
           setCurrentUser(user);
           loadCloudTasks();
+          const completedKey = `echoloop_profile_completed_${user.id}`;
+          const isCompleted = localStorage.getItem(completedKey) === 'true';
+          if (!isCompleted && (!user.name || user.name === 'Google User' || user.name === 'User' || !user.role || user.role === 'Member')) {
+            setIsProfileSetupOpen(true);
+          }
         } else {
           const isDemoActive = localStorage.getItem('echoloop_demo_mode') === 'true';
           if (isDemoActive) {
@@ -203,6 +211,11 @@ export default function App() {
         setCurrentUser(user);
         if (user && user.accountType !== 'DEMO') {
           loadCloudTasks();
+          const completedKey = `echoloop_profile_completed_${user.id}`;
+          const isCompleted = localStorage.getItem(completedKey) === 'true';
+          if (!isCompleted && (!user.name || user.name === 'Google User' || user.name === 'User' || !user.role || user.role === 'Member')) {
+            setIsProfileSetupOpen(true);
+          }
         }
       });
 
@@ -962,6 +975,39 @@ export default function App() {
         totalTreatsAmount={400}
         onFireConfetti={triggerConfettiCelebration}
       />
+
+      {/* Profile Onboarding / Setup Modal */}
+      {currentUser && (
+        <ProfileSetupModal
+          isOpen={isProfileSetupOpen}
+          user={currentUser}
+          onSaveProfile={async (updates) => {
+            if (!currentUser) return;
+            try {
+              const updated = await supabaseUpdateProfile(currentUser.id, updates);
+              if (updated) {
+                setCurrentUser(updated);
+                try {
+                  localStorage.setItem('echoloop_user', JSON.stringify(updated));
+                  localStorage.setItem(`echoloop_profile_completed_${currentUser.id}`, 'true');
+                } catch {}
+              } else {
+                const localUpdated = { ...currentUser, ...updates };
+                setCurrentUser(localUpdated);
+                try {
+                  localStorage.setItem('echoloop_user', JSON.stringify(localUpdated));
+                  localStorage.setItem(`echoloop_profile_completed_${currentUser.id}`, 'true');
+                } catch {}
+              }
+              setIsProfileSetupOpen(false);
+            } catch (e: any) {
+              console.warn('Profile update error:', e);
+              throw e;
+            }
+          }}
+          onDismiss={() => setIsProfileSetupOpen(false)}
+        />
+      )}
 
       {/* Floating Voice Button (Desktop only - mobile has centered BottomNav button) */}
       <div className="hidden sm:flex fixed bottom-6 right-6 z-20">

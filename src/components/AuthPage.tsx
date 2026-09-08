@@ -17,9 +17,11 @@ import {
 import { UserProfile } from '../types';
 import { 
   supabaseSignIn, 
-  supabaseSignUp 
+  supabaseSignUp,
+  supabaseSignInWithGoogle
 } from '../services/supabaseAuth';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { TermsModal } from './TermsModal';
 
 interface AuthPageProps {
   initialMode?: 'SIGN_IN' | 'SIGN_UP';
@@ -51,9 +53,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   // Sign Up Fields
   const [name, setName] = useState('');
-  const [role, setRole] = useState(ROLES[0]);
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [termsAccepted, setTermsAccepted] = useState(true);
+  const [role, setRole] = useState(ROLES[0]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
 
   // UI state
   const [showPassword, setShowPassword] = useState(false);
@@ -207,22 +210,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }, 400);
   };
 
-  // 1-Click Google Sign In simulation
-  const handleGoogleAuth = () => {
+  // Real Google Sign In via Supabase OAuth
+  const handleGoogleAuth = async () => {
     setIsLoading(true);
     setErrorMessage(null);
-    setTimeout(() => {
-      const googleUser: UserProfile = {
-        id: `user-google-${Date.now()}`,
-        name: 'Google User',
-        email: 'verified.user@gmail.com',
-        role: 'Founder & Creator',
-        accountType: 'GOOGLE',
-        createdAt: new Date().toISOString(),
-      };
+    try {
+      if (!isSupabaseConfigured()) {
+        throw new Error('Supabase is not configured yet. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+      }
+      await supabaseSignInWithGoogle();
+    } catch (err: any) {
+      console.warn('Google sign in error:', err);
+      const msg = String(err?.message || '');
+      if (
+        msg.toLowerCase().includes('provider') || 
+        msg.toLowerCase().includes('not enabled') || 
+        msg.toLowerCase().includes('unsupported')
+      ) {
+        setErrorMessage(
+          'Google Sign-In is not enabled yet in your Supabase project. To enable it: Go to your Supabase Dashboard -> Authentication -> Providers -> Google, enable it and enter your Google OAuth credentials. In the meantime, you can sign in with Email & Password or explore in Demo Mode.'
+        );
+      } else {
+        setErrorMessage(err?.message || 'Failed to initiate Google sign in.');
+      }
       setIsLoading(false);
-      onAuthSuccess(googleUser);
-    }, 450);
+    }
   };
 
   return (
@@ -550,14 +562,26 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     <span className="text-[11px] sm:text-xs">Remember my session</span>
                   </label>
                 ) : (
-                  <label className="flex items-center gap-2 cursor-pointer text-zinc-600 select-none">
+                  <label className="flex items-start gap-2 cursor-pointer text-zinc-600 select-none">
                     <input
                       type="checkbox"
                       checked={termsAccepted}
                       onChange={(e) => setTermsAccepted(e.target.checked)}
-                      className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      className="mt-0.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
                     />
-                    <span className="text-[11px] sm:text-xs">I accept the Terms & Privacy policy</span>
+                    <span className="text-[11px] sm:text-xs leading-snug">
+                      I accept the{' '}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setIsTermsOpen(true);
+                        }}
+                        className="text-indigo-600 hover:text-indigo-800 font-bold underline underline-offset-2 cursor-pointer inline"
+                      >
+                        Terms & Privacy policy
+                      </button>
+                    </span>
                   </label>
                 )}
 
@@ -678,6 +702,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         EchoLoop &copy; {new Date().getFullYear()} • Autonomous Voice Accountability
       </footer>
 
+      <TermsModal
+        isOpen={isTermsOpen}
+        onClose={() => setIsTermsOpen(false)}
+        onAccept={() => setTermsAccepted(true)}
+        showAcceptButton={true}
+      />
     </div>
   );
 };

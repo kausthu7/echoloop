@@ -163,10 +163,73 @@ export function onSupabaseAuthStateChange(callback: (user: UserProfile | null) =
       email: authUser.email || '',
       role: profileData?.role || authUser.user_metadata?.role || 'Member',
       avatarUrl: profileData?.avatar_url || '',
-      accountType: 'STANDARD',
+      accountType: authUser.app_metadata?.provider === 'google' ? 'GOOGLE' : 'STANDARD',
       createdAt: profileData?.created_at || authUser.created_at || new Date().toISOString(),
     });
   });
 
   return { unsubscribe: () => subscription.unsubscribe() };
+}
+
+/**
+ * Sign in using Google OAuth via Supabase
+ */
+export async function supabaseSignInWithGoogle(): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+  }
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+/**
+ * Update user profile in Supabase profiles table
+ */
+export async function supabaseUpdateProfile(
+  userId: string, 
+  updates: { name?: string; role?: string; avatarUrl?: string }
+): Promise<UserProfile | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  const rowUpdates: any = {
+    updated_at: new Date().toISOString(),
+  };
+  if (updates.name !== undefined) rowUpdates.name = updates.name.trim();
+  if (updates.role !== undefined) rowUpdates.role = updates.role.trim();
+  if (updates.avatarUrl !== undefined) rowUpdates.avatar_url = updates.avatarUrl;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(rowUpdates)
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) {
+    console.warn('Failed to update profile in Supabase:', error.message);
+    throw new Error(error.message);
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    email: data.email,
+    role: data.role,
+    avatarUrl: data.avatar_url,
+    accountType: 'STANDARD',
+    createdAt: data.created_at,
+  };
 }
