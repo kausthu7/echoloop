@@ -192,15 +192,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       }
       await supabaseSignInWithGoogle();
     } catch (err: any) {
-      console.warn('Google sign in error:', err);
       const msg = String(err?.message || '');
       if (
+        msg.includes('GOOGLE_PROVIDER_NOT_ENABLED') ||
         msg.toLowerCase().includes('provider') || 
         msg.toLowerCase().includes('not enabled') || 
         msg.toLowerCase().includes('unsupported')
       ) {
         setErrorMessage(
-          'Google Sign-In is not enabled yet in your Supabase project. To enable it: Go to your Supabase Dashboard -> Authentication -> Providers -> Google, enable it and enter your Google OAuth credentials.'
+          'Google Provider is not enabled in your Supabase project yet. In your Supabase Dashboard: go to Authentication -> Providers -> Google, toggle it ON, and enter your Google Client ID & Secret. You can also sign up or sign in instantly with Email & Password above!'
         );
       } else {
         setErrorMessage(err?.message || 'Failed to initiate Google sign in.');

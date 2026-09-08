@@ -179,6 +179,28 @@ export async function supabaseSignInWithGoogle(): Promise<void> {
     throw new Error('Supabase is not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }
 
+  // Pre-flight check: verify if Google OAuth provider is enabled in Supabase project
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseAnonKey) {
+      const res = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+        headers: { apikey: supabaseAnonKey },
+      });
+      if (res.ok) {
+        const settings = await res.json();
+        if (settings?.external?.google === false) {
+          throw new Error('GOOGLE_PROVIDER_NOT_ENABLED');
+        }
+      }
+    }
+  } catch (err: any) {
+    if (err?.message === 'GOOGLE_PROVIDER_NOT_ENABLED') {
+      throw err;
+    }
+    // If settings check fails due to network or CORS, continue to standard OAuth
+  }
+
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
